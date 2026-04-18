@@ -90,7 +90,7 @@ with tab1:
             with col2:
                 st.markdown("<div style='margin-top: 28px'></div>", unsafe_allow_html=True)
                 submit_disabled = st.session_state.agent_processing or not user_query.strip()
-                if st.button("🤖 Ask", disabled=submit_disabled, use_container_width=True, type="primary"):
+                if st.button("🤖 Ask", disabled=submit_disabled, width="stretch", type="primary"):
                     if user_query.strip():
                         st.session_state.agent_processing = True
                         st.session_state.last_query = user_query.strip()
@@ -123,7 +123,7 @@ with tab2:
     with col1:
         st.subheader("Your PlayStation Library")
     with col2:
-        if st.button("🔄 Sync Covers", use_container_width=True):
+        if st.button("🔄 Sync Covers", width="stretch"):
             with st.spinner("Syncing covers from IGDB..."):
                 import subprocess
                 try:
@@ -170,7 +170,7 @@ with tab2:
                     all_played[['name', 'category', 'play_count', 'play_duration_hours']].rename(
                         columns={'name': 'Game', 'play_duration_hours': 'Hours', 'play_count': 'Play Count'}
                     ),
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True
                 )
 
@@ -243,31 +243,41 @@ with tab2:
                         )
                         st.divider()
                 
-                if submitted:
-                    changes_made = 0
-                    for i, row in filtered_df.iterrows():
-                        game_title = row.get("game", "Unknown Game")
-                        original_index = row['index']
-                        original_status = row.get("personal_status", "📥 Backlog")
-                        if original_status not in status_options:
-                            original_status = "📥 Backlog"
-                        
-                        # Match the unique key used in the selectbox
-                        new_status = st.session_state.get(f"status_{original_index}_{game_title}")
-                        
-                        if new_status and new_status != original_status:
-                            requests.put(
-                                f"http://127.0.0.1:8000/games/{game_title}/status", 
-                                json={"status": new_status}
-                            )
-                            changes_made += 1
-                    
-                    if changes_made > 0:
-                        st.success(f"✅ Successfully updated {changes_made} games!")
-                        st.cache_data.clear() # Clear cache so new data loads on rerun
-                        st.rerun()
-                    else:
-                        st.info("No changes detected.")
+                        if submitted:
+                            changes_made = 0
+                            for i, row in filtered_df.iterrows():
+                                game_title = row.get("game", "Unknown Game")
+                                original_index = row['index']
+                                original_status = row.get("personal_status", "📥 Backlog")
+                                if original_status not in status_options:
+                                    original_status = "📥 Backlog"
+                                
+                                # Match the unique key used in the selectbox
+                                new_status = st.session_state.get(f"status_{original_index}_{game_title}")
+                                
+                                if new_status and new_status != original_status:
+                                    # 🚨 CRITICAL FIX: URL Encode the game title! 🚨
+                                    # This converts spaces, '&', '?', etc. into safe web characters
+                                    safe_title = urllib.parse.quote(game_title, safe="")
+                                    
+                                    try:
+                                        res = requests.put(
+                                            f"http://127.0.0.1:8000/games/{safe_title}/status", 
+                                            json={"status": new_status}
+                                        )
+                                        if res.status_code == 200:
+                                            changes_made += 1
+                                        else:
+                                            st.error(f"⚠️ Backend Error for '{game_title}': {res.text}")
+                                    except Exception as e:
+                                        st.error(f"⚠️ Failed to connect to API for '{game_title}': {e}")
+                            
+                            if changes_made > 0:
+                                st.success(f"✅ Successfully updated {changes_made} games! Refreshing dashboard...")
+                                st.cache_data.clear() # Clear cache so new data loads on rerun
+                                st.rerun() # Let Streamlit automatically refresh the UI! Do not press F5.
+                            else:
+                                st.info("No changes detected.")
     else:
         st.info("No active games found in the database.")
 
@@ -289,7 +299,7 @@ with tab3:
                     'metacritic': 'Metacritic Score',
                     'release': 'Release Date'
                 }),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True
             )
         else:

@@ -1,14 +1,14 @@
 import os
 import requests
 import urllib.parse
-import streamlit as st
+from functools import lru_cache
 
 CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
 CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET")
 
-# Note: No error raised here - functions will handle missing credentials gracefully
-
-@st.cache_data(ttl=3500)
+# Use Python's native cache instead of Streamlit's
+# maxsize=1 keeps exactly 1 token in memory
+@lru_cache(maxsize=1)
 def get_igdb_token():
     if not CLIENT_ID or not CLIENT_SECRET:
         return None
@@ -19,7 +19,8 @@ def get_igdb_token():
         return response.json()['access_token']
     return None
 
-@st.cache_data(ttl=86400)
+# maxsize=1000 remembers the last 1000 covers we fetched
+@lru_cache(maxsize=1000)
 def get_game_cover(game_name: str):
     # Use placehold.co for fallback cover images.
     safe_name = urllib.parse.quote(game_name)
@@ -40,7 +41,7 @@ def get_game_cover(game_name: str):
     
     try:
         response = requests.post(url, headers=headers, data=body)
-        if response.status_code == 200:
+        if response.status_code == 200 and response.json():
             data = response.json()
             image_id = data[0]['cover']['image_id']
             return f"https://images.igdb.com/igdb/image/upload/t_cover_big/{image_id}.jpg"
